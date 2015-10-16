@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="EE-3.6.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <file:connector name="File" autoDelete="true" streaming="true" validateConnections="true" doc:name="File"/>
+    <http:listener-config name="HTTP_Listener_Configuration" host="localhost" port="8082" doc:name="HTTP Listener Configuration"/>
+    
+    <configuration doc:name="Common Configuration">
+		<expression-language>
+			<import class="org.springframework.util.Assert" />
+			<import class="java.util.Map" />
+			<import class="java.util.List" />
+			<import class="org.apache.log4j.NDC" />
+			<import class="org.slf4j.MDC" />
+			<global-functions><![CDATA[
+			def logPush()      { MDC.put("Ses_id", message.id); }
+	        def logIn(msg)     { return msg;  }
+	        def logOut(msg)    { return msg; }
+
+        	]]></global-functions>
+		</expression-language>
+	</configuration>
+    
+    <flow name="response_blockFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/res/*" doc:name="HTTP"/>
+        <expression-component doc:name="Expression"><![CDATA[logPush();]]></expression-component>
+        <logger level="INFO" doc:name="Logger" message="#[logIn(&quot;Entered&quot;)]"/>
+        <set-payload value="#[message.inboundProperties.'http.query.params'.Name]" doc:name="Set Payload"/>
+        <vm:outbound-endpoint exchange-pattern="request-response" path="vmq" doc:name="VM"/>
+        <logger message="#[logOut(&quot;Exited!&quot;)]" level="INFO" doc:name="Logger"/>
+        <object-to-string-transformer doc:name="Object to String"/>
+    </flow>
+    <flow name="response_blockFlow1">
+        <vm:inbound-endpoint exchange-pattern="request-response" path="vmq" doc:name="VM"/>
+        <logger message="#[logIn('In Second Flow')]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[payload ==&quot;Naveen&quot;]">
+                <expression-component doc:name="Expression"><![CDATA[payload = ' Hello ' +  payload + '..!']]></expression-component>
+            </when>
+            <otherwise>
+        <scripting:component doc:name="Groovy">
+            <scripting:script engine="Groovy"><![CDATA[throw new IllegalArgumentException('New Exception')]]></scripting:script>
+        </scripting:component>
+            </otherwise>
+        </choice>
+    </flow>
+</mule>
